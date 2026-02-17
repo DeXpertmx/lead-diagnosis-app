@@ -4,8 +4,6 @@ import { volkernClient } from '@/lib/volkern/volkern-client';
 import { getDiagnosisEmailHtml } from '@/lib/email/templates/DiagnosisEmail';
 import { Resend } from 'resend';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 export async function POST(request: NextRequest) {
     console.log('[Diagnosis API] Starting request processing');
 
@@ -87,18 +85,23 @@ export async function POST(request: NextRequest) {
         // Step 5: Send Confirmation Email to Client
         if (diagnosis.email) {
             console.log(`[Diagnosis API] Sending email to ${diagnosis.email}...`);
-            try {
-                const emailHtml = getDiagnosisEmailHtml(diagnosis, executiveDiagnosis, actionPlans);
-                await resend.emails.send({
-                    from: 'Dimension Expert <diagnostico@dimension.expert>',
-                    to: diagnosis.email,
-                    subject: `Tu Diagnóstico de Automatización - ${diagnosis.empresa}`,
-                    html: emailHtml,
-                });
-                console.log('[Diagnosis API] Email sent successfully');
-            } catch (emailError) {
-                console.error('[Diagnosis API] Error sending email:', emailError);
-                // We don't fail the whole request if email fails, but we log it
+
+            if (!process.env.RESEND_API_KEY) {
+                console.error('[Diagnosis API] RESEND_API_KEY is missing. Email skipped.');
+            } else {
+                try {
+                    const resend = new Resend(process.env.RESEND_API_KEY);
+                    const emailHtml = getDiagnosisEmailHtml(diagnosis, executiveDiagnosis, actionPlans);
+                    await resend.emails.send({
+                        from: 'Dimension Expert <diagnostico@dimension.expert>',
+                        to: diagnosis.email,
+                        subject: `Tu Diagnóstico de Automatización - ${diagnosis.empresa}`,
+                        html: emailHtml,
+                    });
+                    console.log('[Diagnosis API] Email sent successfully');
+                } catch (emailError) {
+                    console.error('[Diagnosis API] Error sending email:', emailError);
+                }
             }
         }
 
