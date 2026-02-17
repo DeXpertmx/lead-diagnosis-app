@@ -27,6 +27,7 @@ export interface DiagnosisState {
     consecuencia6Meses?: string;
     objetivoNegocio?: string;
     prioridad?: string;
+    terminosYCondiciones?: string;
 }
 
 export interface ProcessResult {
@@ -151,6 +152,7 @@ export function generateSummary(state: DiagnosisState): string {
         `## Objetivos`,
         `- **Objetivo de negocio:** ${state.objetivoNegocio}`,
         `- **Prioridad:** ${state.prioridad}/10`,
+        `- **Términos y Condiciones:** ${state.terminosYCondiciones || 'No aceptados'}`,
         ``,
         `---`,
         `*Diagnóstico generado automáticamente el ${new Date().toLocaleDateString('es-ES')}*`,

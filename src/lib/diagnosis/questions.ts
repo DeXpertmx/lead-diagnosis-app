@@ -19,6 +19,7 @@ export interface DiagnosisFields {
     consecuencia6Meses: string;
     objetivoNegocio: string;
     prioridad: string;
+    terminosYCondiciones: string;
 }
 
 export const DIAGNOSIS_QUESTIONS: Question[] = [
@@ -105,6 +106,13 @@ export const DIAGNOSIS_QUESTIONS: Question[] = [
         question: 'Del 1 al 10, ¿qué tan urgente es para ti resolver esto? (1 = poco urgente, 10 = crítico)',
         validation: 'priority',
         placeholder: 'Un número del 1 al 10',
+    },
+    {
+        id: 'q12',
+        field: 'terminosYCondiciones',
+        question: 'Para finalizar, ¿aceptas nuestros términos y condiciones? Esto nos permite enviarte el diagnóstico por email y que un especialista te contacte en las próximas 24 horas para ayudarte. (Escribe "Acepto" para continuar)',
+        validation: 'required',
+        placeholder: 'Escribe "Acepto"',
     },
 ];
 
