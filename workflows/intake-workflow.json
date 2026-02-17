@@ -1,0 +1,177 @@
+{
+    "id": "intake-diagnosis",
+    "version": "1.0.0",
+    "name": "Flujo de Intake Diagnóstico",
+    "description": "Workflow que orquesta la conversación de diagnóstico con el usuario, recopilando las 11 preguntas obligatorias en orden secuencial.",
+    "trigger": {
+        "type": "user_event",
+        "event": "conversation_start",
+        "source": "web_chat"
+    },
+    "config": {
+        "timeout_minutes": 30,
+        "allow_resume": true,
+        "persist_state": true
+    },
+    "variables": {
+        "diagnosisState": {
+            "type": "object",
+            "initial": {}
+        },
+        "currentQuestionIndex": {
+            "type": "number",
+            "initial": 0
+        },
+        "isComplete": {
+            "type": "boolean",
+            "initial": false
+        }
+    },
+    "questions": [
+        {
+            "field": "nombre",
+            "validation": "required"
+        },
+        {
+            "field": "email",
+            "validation": "email"
+        },
+        {
+            "field": "empresa",
+            "validation": "required"
+        },
+        {
+            "field": "industria",
+            "validation": "required"
+        },
+        {
+            "field": "procesoActual",
+            "validation": "required"
+        },
+        {
+            "field": "procesosManuales",
+            "validation": "required"
+        },
+        {
+            "field": "dolorPrincipal",
+            "validation": "required"
+        },
+        {
+            "field": "perdidasActuales",
+            "validation": "required"
+        },
+        {
+            "field": "consecuencia6Meses",
+            "validation": "required"
+        },
+        {
+            "field": "objetivoNegocio",
+            "validation": "required"
+        },
+        {
+            "field": "prioridad",
+            "validation": "priority_1_10"
+        }
+    ],
+    "steps": [
+        {
+            "id": "initialize",
+            "action": "initialize_state",
+            "description": "Inicializar estado de la conversación",
+            "output": "diagnosisState"
+        },
+        {
+            "id": "show_welcome",
+            "action": "send_message",
+            "description": "Enviar mensaje de bienvenida",
+            "params": {
+                "message": "¡Hola! 👋 Soy tu asistente de diagnóstico empresarial. Voy a hacerte algunas preguntas para entender mejor tu negocio y cómo podemos ayudarte con automatizaciones e IA."
+            }
+        },
+        {
+            "id": "question_loop",
+            "action": "loop",
+            "description": "Iterar sobre las 11 preguntas obligatorias",
+            "config": {
+                "iterate_over": "questions",
+                "item_variable": "currentQuestion"
+            },
+            "steps": [
+                {
+                    "id": "ask_question",
+                    "action": "send_message",
+                    "params": {
+                        "message": "{{currentQuestion.question}}"
+                    }
+                },
+                {
+                    "id": "wait_response",
+                    "action": "wait_user_input",
+                    "timeout_seconds": 300
+                },
+                {
+                    "id": "validate_response",
+                    "action": "validate",
+                    "params": {
+                        "value": "{{user_input}}",
+                        "validation_type": "{{currentQuestion.validation}}"
+                    },
+                    "on_error": {
+                        "action": "send_message",
+                        "params": {
+                            "message": "Por favor, revisa tu respuesta e intenta de nuevo."
+                        },
+                        "goto": "ask_question"
+                    }
+                },
+                {
+                    "id": "store_answer",
+                    "action": "update_state",
+                    "params": {
+                        "target": "diagnosisState",
+                        "field": "{{currentQuestion.field}}",
+                        "value": "{{user_input}}"
+                    }
+                }
+            ]
+        },
+        {
+            "id": "mark_complete",
+            "action": "update_state",
+            "params": {
+                "target": "isComplete",
+                "value": true
+            }
+        },
+        {
+            "id": "generate_summary",
+            "action": "generate_diagnosis_summary",
+            "input": "diagnosisState",
+            "output": "diagnosisSummary"
+        },
+        {
+            "id": "trigger_lead_workflow",
+            "action": "trigger_workflow",
+            "params": {
+                "workflow_id": "lead-management",
+                "input": {
+                    "diagnosisState": "{{diagnosisState}}",
+                    "summary": "{{diagnosisSummary}}"
+                }
+            }
+        }
+    ],
+    "on_error": {
+        "action": "log_error",
+        "notify": true
+    },
+    "metadata": {
+        "created_at": "2026-02-09T11:50:00.000Z",
+        "author": "Volkern AI System",
+        "tags": [
+            "diagnosis",
+            "intake",
+            "conversation"
+        ]
+    }
+}

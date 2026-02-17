@@ -1,0 +1,138 @@
+{
+    "id": "task-creation",
+    "version": "1.0.0",
+    "name": "Creación de Tarea de Llamada",
+    "description": "Workflow que crea automáticamente una tarea de llamada de seguimiento para el lead recién creado/actualizado.",
+    "trigger": {
+        "type": "workflow",
+        "source_workflow": "lead-management",
+        "event": "lead_created_or_updated"
+    },
+    "input_schema": {
+        "leadId": {
+            "type": "string",
+            "required": true,
+            "description": "ID del lead en Volkern CRM (formato CUID)"
+        },
+        "leadNombre": {
+            "type": "string",
+            "required": false,
+            "description": "Nombre del lead para personalización"
+        },
+        "prioridad": {
+            "type": "string",
+            "required": false,
+            "description": "Nivel de prioridad del diagnóstico (1-10)"
+        }
+    },
+    "config": {
+        "retry_on_failure": true,
+        "max_retries": 2,
+        "retry_delay_seconds": 10
+    },
+    "steps": [
+        {
+            "id": "calculate_due_date",
+            "action": "datetime",
+            "description": "Calcular fecha de vencimiento (+24 horas desde ahora)",
+            "params": {
+                "operation": "add",
+                "base": "{{now}}",
+                "amount": 24,
+                "unit": "hours",
+                "output": "fechaVencimiento",
+                "format": "iso8601"
+            }
+        },
+        {
+            "id": "adjust_for_priority",
+            "action": "conditional",
+            "description": "Ajustar fecha si prioridad es alta",
+            "condition": "{{prioridad >= 9}}",
+            "if_true": {
+                "action": "datetime",
+                "params": {
+                    "operation": "add",
+                    "base": "{{now}}",
+                    "amount": 4,
+                    "unit": "hours",
+                    "output": "fechaVencimiento",
+                    "format": "iso8601"
+                }
+            },
+            "if_false": {
+                "action": "noop"
+            }
+        },
+        {
+            "id": "build_task_payload",
+            "action": "transform",
+            "description": "Construir payload de la tarea",
+            "params": {
+                "output": "taskPayload",
+                "mapping": {
+                    "tipo": "llamada",
+                    "titulo": "Llamada diagnóstico automatización",
+                    "descripcion": "Revisar diagnóstico y propuesta generada por IA. Contactar al lead {{leadNombre}} para discutir soluciones de automatización.",
+                    "fechaVencimiento": "{{fechaVencimiento}}"
+                }
+            }
+        },
+        {
+            "id": "create_task",
+            "action": "volkern_api",
+            "description": "Crear tarea en Volkern CRM",
+            "params": {
+                "method": "POST",
+                "endpoint": "/api/leads/{{leadId}}/tasks",
+                "body": "{{taskPayload}}",
+                "output": "createdTask"
+            },
+            "notes": "Endpoint según VOLKERN_SKILL.md: POST /api/leads/{leadId}/tasks"
+        },
+        {
+            "id": "log_success",
+            "action": "log",
+            "params": {
+                "level": "info",
+                "message": "Tarea de llamada creada exitosamente",
+                "data": {
+                    "taskId": "{{createdTask.id}}",
+                    "leadId": "{{leadId}}",
+                    "fechaVencimiento": "{{fechaVencimiento}}"
+                }
+            }
+        }
+    ],
+    "output": {
+        "taskId": "{{createdTask.id}}",
+        "fechaVencimiento": "{{fechaVencimiento}}",
+        "success": true
+    },
+    "on_error": {
+        "action": "log",
+        "params": {
+            "level": "error",
+            "message": "Error al crear tarea de llamada",
+            "leadId": "{{leadId}}",
+            "error": "{{error}}"
+        }
+    },
+    "metadata": {
+        "created_at": "2026-02-09T11:50:00.000Z",
+        "author": "Volkern AI System",
+        "volkern_api_reference": "VOLKERN_SKILL.md - Section: Task Management",
+        "task_tipos_validos": [
+            "llamada",
+            "email",
+            "reunion",
+            "recordatorio"
+        ],
+        "tags": [
+            "task",
+            "llamada",
+            "followup",
+            "volkern"
+        ]
+    }
+}

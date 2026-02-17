@@ -1,0 +1,191 @@
+{
+    "id": "lead-management",
+    "version": "1.0.0",
+    "name": "Gestión de Lead en Volkern",
+    "description": "Workflow que crea o actualiza un lead en Volkern CRM a partir del diagnóstico completado.",
+    "trigger": {
+        "type": "workflow",
+        "source_workflow": "intake-diagnosis",
+        "event": "diagnosis_complete"
+    },
+    "input_schema": {
+        "diagnosisState": {
+            "type": "object",
+            "required": true,
+            "properties": {
+                "nombre": {
+                    "type": "string",
+                    "required": true
+                },
+                "email": {
+                    "type": "string",
+                    "required": true
+                },
+                "empresa": {
+                    "type": "string"
+                },
+                "industria": {
+                    "type": "string"
+                },
+                "procesoActual": {
+                    "type": "string"
+                },
+                "procesosManuales": {
+                    "type": "string"
+                },
+                "dolorPrincipal": {
+                    "type": "string"
+                },
+                "perdidasActuales": {
+                    "type": "string"
+                },
+                "consecuencia6Meses": {
+                    "type": "string"
+                },
+                "objetivoNegocio": {
+                    "type": "string"
+                },
+                "prioridad": {
+                    "type": "string"
+                }
+            }
+        },
+        "summary": {
+            "type": "string",
+            "required": false
+        }
+    },
+    "config": {
+        "retry_on_failure": true,
+        "max_retries": 3,
+        "retry_delay_seconds": 5
+    },
+    "steps": [
+        {
+            "id": "build_tags",
+            "action": "transform",
+            "description": "Construir array de etiquetas",
+            "params": {
+                "output": "leadTags",
+                "operations": [
+                    {
+                        "type": "array_create",
+                        "initial": [
+                            "diagnostico-ia"
+                        ]
+                    },
+                    {
+                        "type": "array_push_if",
+                        "condition": "{{diagnosisState.industria}}",
+                        "value": "{{diagnosisState.industria | lowercase | replace(' ', '-')}}"
+                    },
+                    {
+                        "type": "array_push_if",
+                        "condition": "{{diagnosisState.prioridad >= 8}}",
+                        "value": "urgente"
+                    }
+                ]
+            }
+        },
+        {
+            "id": "build_contexto",
+            "action": "template",
+            "description": "Generar contexto del proyecto",
+            "params": {
+                "output": "contextoProyecto",
+                "template": "DIAGNÓSTICO DE AUTOMATIZACIÓN\n=============================\n\nEMPRESA: {{diagnosisState.empresa}}\nINDUSTRIA: {{diagnosisState.industria}}\nPRIORIDAD: {{diagnosisState.prioridad}}/10\n\nPROCESO ACTUAL:\n{{diagnosisState.procesoActual}}\n\nTAREAS MANUALES:\n{{diagnosisState.procesosManuales}}\n\nDOLOR PRINCIPAL:\n{{diagnosisState.dolorPrincipal}}\n\nPÉRDIDAS ACTUALES:\n{{diagnosisState.perdidasActuales}}\n\nCONSECUENCIA SI NO SE ACTÚA (6 meses):\n{{diagnosisState.consecuencia6Meses}}\n\nOBJETIVO DE NEGOCIO:\n{{diagnosisState.objetivoNegocio}}\n\n---\nGenerado: {{now | iso8601}}"
+            }
+        },
+        {
+            "id": "map_to_lead",
+            "action": "transform",
+            "description": "Mapear datos del diagnóstico al formato de lead de Volkern",
+            "params": {
+                "output": "leadPayload",
+                "mapping": {
+                    "nombre": "{{diagnosisState.nombre}}",
+                    "email": "{{diagnosisState.email}}",
+                    "empresa": "{{diagnosisState.empresa}}",
+                    "canal": "web",
+                    "estado": "nuevo",
+                    "etiquetas": "{{leadTags}}",
+                    "contextoProyecto": "{{contextoProyecto}}"
+                }
+            }
+        },
+        {
+            "id": "upsert_lead",
+            "action": "volkern_api",
+            "description": "Crear o actualizar lead en Volkern CRM",
+            "params": {
+                "method": "POST",
+                "endpoint": "/api/leads",
+                "body": "{{leadPayload}}",
+                "output": "createdLead"
+            },
+            "notes": "Email actúa como clave de upsert: si existe, se actualiza el lead"
+        },
+        {
+            "id": "log_success",
+            "action": "log",
+            "params": {
+                "level": "info",
+                "message": "Lead creado/actualizado exitosamente",
+                "data": {
+                    "leadId": "{{createdLead.id}}",
+                    "nombre": "{{createdLead.nombre}}",
+                    "email": "{{createdLead.email}}"
+                }
+            }
+        },
+        {
+            "id": "trigger_task_workflow",
+            "action": "trigger_workflow",
+            "description": "Disparar workflow de creación de tarea",
+            "params": {
+                "workflow_id": "task-creation",
+                "input": {
+                    "leadId": "{{createdLead.id}}",
+                    "leadNombre": "{{createdLead.nombre}}",
+                    "prioridad": "{{diagnosisState.prioridad}}"
+                }
+            }
+        }
+    ],
+    "output": {
+        "leadId": "{{createdLead.id}}",
+        "success": true
+    },
+    "on_error": {
+        "action": "handle_error",
+        "steps": [
+            {
+                "id": "log_error",
+                "action": "log",
+                "params": {
+                    "level": "error",
+                    "message": "Error al crear/actualizar lead",
+                    "error": "{{error}}"
+                }
+            },
+            {
+                "id": "notify_fallback",
+                "action": "store_locally",
+                "params": {
+                    "data": "{{diagnosisState}}",
+                    "reason": "volkern_api_error"
+                }
+            }
+        ]
+    },
+    "metadata": {
+        "created_at": "2026-02-09T11:50:00.000Z",
+        "author": "Volkern AI System",
+        "volkern_api_reference": "VOLKERN_SKILL.md - Section: Lead Management",
+        "tags": [
+            "lead",
+            "crm",
+            "volkern"
+        ]
+    }
+}

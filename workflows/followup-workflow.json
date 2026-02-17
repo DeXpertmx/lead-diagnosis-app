@@ -1,0 +1,175 @@
+{
+    "id": "followup",
+    "version": "1.0.0",
+    "name": "Seguimiento Posterior",
+    "description": "Workflow de seguimiento que revisa tareas vencidas y crea recordatorios adicionales para leads no contactados.",
+    "trigger": {
+        "type": "scheduled",
+        "schedule": {
+            "cron": "0 9 * * 1-5",
+            "timezone": "Europe/Madrid",
+            "description": "Cada día laborable a las 9:00 AM"
+        }
+    },
+    "config": {
+        "batch_size": 50,
+        "parallel_execution": false,
+        "timeout_minutes": 30
+    },
+    "steps": [
+        {
+            "id": "get_pending_leads",
+            "action": "volkern_api",
+            "description": "Obtener leads en estado 'nuevo' con tareas vencidas",
+            "params": {
+                "method": "GET",
+                "endpoint": "/api/leads",
+                "query": {
+                    "estado": "nuevo",
+                    "page": "1",
+                    "limit": "{{config.batch_size}}"
+                },
+                "output": "pendingLeads"
+            }
+        },
+        {
+            "id": "filter_with_overdue_tasks",
+            "action": "filter",
+            "description": "Filtrar leads con tareas vencidas",
+            "params": {
+                "input": "{{pendingLeads.data}}",
+                "output": "overdueLeads",
+                "condition": "lead has overdue task"
+            },
+            "notes": "En implementación real, se haría una consulta de tareas por lead"
+        },
+        {
+            "id": "process_overdue_leads",
+            "action": "for_each",
+            "description": "Procesar cada lead con tareas vencidas",
+            "params": {
+                "items": "{{overdueLeads}}",
+                "item_variable": "lead"
+            },
+            "steps": [
+                {
+                    "id": "get_lead_tasks",
+                    "action": "volkern_api",
+                    "params": {
+                        "method": "GET",
+                        "endpoint": "/api/leads/{{lead.id}}/tasks",
+                        "output": "leadTasks"
+                    }
+                },
+                {
+                    "id": "check_overdue",
+                    "action": "filter",
+                    "params": {
+                        "input": "{{leadTasks.data}}",
+                        "output": "overdueTasks",
+                        "condition": "task.completada == false AND task.fechaVencimiento < now"
+                    }
+                },
+                {
+                    "id": "has_overdue_tasks",
+                    "action": "conditional",
+                    "condition": "{{overdueTasks.length > 0}}",
+                    "if_true": {
+                        "steps": [
+                            {
+                                "id": "update_lead_status",
+                                "action": "volkern_api",
+                                "description": "Actualizar estado del lead a 'contactado'",
+                                "params": {
+                                    "method": "PATCH",
+                                    "endpoint": "/api/leads/{{lead.id}}",
+                                    "body": {
+                                        "estado": "contactado"
+                                    }
+                                },
+                                "notes": "Marca que se ha intentado contactar"
+                            },
+                            {
+                                "id": "create_reminder",
+                                "action": "volkern_api",
+                                "description": "Crear tarea de recordatorio",
+                                "params": {
+                                    "method": "POST",
+                                    "endpoint": "/api/leads/{{lead.id}}/tasks",
+                                    "body": {
+                                        "tipo": "recordatorio",
+                                        "titulo": "Seguimiento pendiente - {{lead.nombre}}",
+                                        "descripcion": "Este lead tiene tareas vencidas sin completar. Revisar y contactar urgentemente.",
+                                        "fechaVencimiento": "{{now | add_hours(48) | iso8601}}"
+                                    },
+                                    "output": "reminderTask"
+                                }
+                            },
+                            {
+                                "id": "log_reminder_created",
+                                "action": "log",
+                                "params": {
+                                    "level": "info",
+                                    "message": "Recordatorio de seguimiento creado",
+                                    "data": {
+                                        "leadId": "{{lead.id}}",
+                                        "leadNombre": "{{lead.nombre}}",
+                                        "taskId": "{{reminderTask.id}}"
+                                    }
+                                }
+                            }
+                        ]
+                    },
+                    "if_false": {
+                        "action": "noop"
+                    }
+                }
+            ]
+        },
+        {
+            "id": "generate_report",
+            "action": "aggregate",
+            "description": "Generar resumen del batch procesado",
+            "params": {
+                "output": "batchReport",
+                "data": {
+                    "totalLeadsReviewed": "{{pendingLeads.total}}",
+                    "leadsWithOverdueTasks": "{{overdueLeads.length}}",
+                    "remindersCreated": "{{count(reminderTask)}}"
+                }
+            }
+        },
+        {
+            "id": "log_batch_complete",
+            "action": "log",
+            "params": {
+                "level": "info",
+                "message": "Workflow de seguimiento completado",
+                "data": "{{batchReport}}"
+            }
+        }
+    ],
+    "output": {
+        "report": "{{batchReport}}",
+        "success": true
+    },
+    "on_error": {
+        "action": "log",
+        "params": {
+            "level": "error",
+            "message": "Error en workflow de seguimiento",
+            "error": "{{error}}"
+        }
+    },
+    "metadata": {
+        "created_at": "2026-02-09T11:50:00.000Z",
+        "author": "Volkern AI System",
+        "volkern_api_reference": "VOLKERN_SKILL.md - Sections: Lead Management, Task Management",
+        "tags": [
+            "followup",
+            "reminder",
+            "scheduled",
+            "batch"
+        ]
+    }
+}

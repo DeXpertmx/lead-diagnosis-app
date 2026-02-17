@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  diagnosis-app:
+    build: .
+    container_name: lead-diagnosis-app
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - VOLKERN_API_KEY=${VOLKERN_API_KEY}
+      - VOLKERN_BASE_URL=${VOLKERN_BASE_URL:-https://volkern.app/api}
+      - NEXT_PUBLIC_APP_URL=https://diagnosis.dimension.expert
+    # Optional: If you use a reverse proxy like Nginx Proxy Manager / Traefik,
+    # you can add labels or network configurations here.
+    # labels:
+    #   - "traefik.enable=true"
+    #   - "traefik.http.routers.diagnosis.rule=Host(`diagnosis.dimension.expert`)"
+    #   - "traefik.http.routers.diagnosis.entrypoints=websecure"
+    #   - "traefik.http.routers.diagnosis.tls.certresolver=myresolver"
