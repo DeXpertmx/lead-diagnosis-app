@@ -144,3 +144,22 @@ export async function registerLeadInteraction(
         contenido: `[${payload.tipo.toUpperCase()}] ${payload.contenido}`
     });
 }
+
+export interface TaskPayload {
+    titulo: string;
+    descripcion?: string;
+    prioridad?: 'baja' | 'media' | 'alta' | 'urgente';
+    fechaVencimiento?: string;
+    leadId?: string;
+    dealId?: string;
+}
+
+/**
+ * Create a task in Volkern CRM
+ * 
+ * Per VOLKERN_SKILL.md:
+ * - POST /api/tasks
+ */
+export async function createTask(payload: TaskPayload): Promise<any> {
+    return volkernClient.post('/tasks', payload);
+}

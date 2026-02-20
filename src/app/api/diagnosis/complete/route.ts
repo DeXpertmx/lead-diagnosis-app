@@ -8,7 +8,7 @@ import {
     generateClosingChecklist,
     generateCommercialProposal
 } from '@/lib/diagnosis/orchestrator';
-import { registerLead, registerLeadInteraction } from '@/lib/volkern/leads';
+import { registerLead, registerLeadInteraction, createTask } from '@/lib/volkern/leads';
 import { sendPostDiagnosisEmail, sendInternalNotificationEmail } from '@/lib/email/resend';
 
 const N8N_RELAY_URL = 'https://n8n.dimension.expert/webhook/volkern-diagnostico-relay-v1';
@@ -61,7 +61,25 @@ export async function POST(req: NextRequest) {
             });
         }
 
-        // 4. Email Delivery via Resend (Unified approach)
+        // 4. Create Follow-up Task (24 hours)
+        try {
+            console.log('[Volkern] Creating 24h follow-up task...');
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+
+            await createTask({
+                titulo: `Follow-up 24h: Diagnóstico de Integración IA para ${state.empresa || state.nombre}`,
+                descripcion: `Contactar a ${state.nombre} para agendar Sesión Estratégica. El lead tiene un dolor principal: ${state.dolorPrincipal || 'no especificado'}. Consultar Briefing para más detalles.`,
+                prioridad: parseInt(state.prioridad || '5', 10) >= 8 ? 'urgente' : 'alta',
+                fechaVencimiento: tomorrow.toISOString(),
+                leadId: leadId
+            });
+            console.log('[Volkern] Follow-up task created successfully');
+        } catch (taskError) {
+            console.error('[Volkern] Error creating follow-up task:', taskError);
+        }
+
+        // 5. Email Delivery via Resend (Unified approach)
         let emailSent = false;
         try {
             console.log('[Resend] Sending diagnosis email...');
