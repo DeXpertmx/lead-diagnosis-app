@@ -150,6 +150,35 @@
                     "prioridad": "{{diagnosisState.prioridad}}"
                 }
             }
+        },
+        {
+            "id": "send_post_diagnosis_email",
+            "action": "email_service",
+            "description": "Enviar email de consultoría premium post-diagnóstico",
+            "params": {
+                "to": "{{diagnosisState.email}}",
+                "template": "premium-consultancy-post-diagnosis",
+                "variables": {
+                    "nombre": "{{diagnosisState.nombre}}",
+                    "dolorPrincipal": "{{diagnosisState.dolorPrincipal}}",
+                    "procesoActual": "{{diagnosisState.procesoActual}}",
+                    "objetivoNegocio": "{{diagnosisState.objetivoNegocio}}"
+                }
+            }
+        },
+        {
+            "id": "register_email_event",
+            "action": "volkern_api",
+            "description": "Registrar envío de email en Volkern CRM",
+            "params": {
+                "method": "POST",
+                "endpoint": "/api/leads/{{createdLead.id}}/interactions",
+                "body": {
+                    "tipo": "email",
+                    "contenido": "Email post-diagnóstico enviado automáticamente: Tu diagnóstico está listo",
+                    "resultado": "positivo"
+                }
+            }
         }
     ],
     "output": {

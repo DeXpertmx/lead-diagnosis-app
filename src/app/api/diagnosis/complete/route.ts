@@ -1,137 +1,107 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { DiagnosisState, generateContextoProyecto, generateExecutiveDiagnosis, generateAutomationActionPlans } from '@/lib/diagnosis/orchestrator';
-import { volkernClient } from '@/lib/volkern/volkern-client';
-import { getDiagnosisEmailHtml } from '@/lib/email/templates/DiagnosisEmail';
-import { Resend } from 'resend';
+import {
+    DiagnosisState,
+    generateExecutiveDiagnosis,
+    generateContextoProyecto,
+    generateConsultantExecutiveSummary,
+    generateStrategicSessionScript,
+    generateClosingChecklist,
+    generateCommercialProposal
+} from '@/lib/diagnosis/orchestrator';
+import { registerLead, registerLeadInteraction } from '@/lib/volkern/leads';
+import { sendPostDiagnosisEmail, sendInternalNotificationEmail } from '@/lib/email/resend';
 
-export async function POST(request: NextRequest) {
-    console.log('[Diagnosis API] Starting request processing');
+const N8N_RELAY_URL = 'https://n8n.dimension.expert/webhook/volkern-diagnostico-relay-v1';
 
+export async function POST(req: NextRequest) {
     try {
-        const diagnosis: DiagnosisState = await request.json();
-        console.log('[Diagnosis API] Received diagnosis:', JSON.stringify(diagnosis, null, 2));
+        const state: DiagnosisState = await req.json();
 
-        // Validate required fields
-        if (!diagnosis.nombre) {
-            return NextResponse.json(
-                { error: 'El nombre es requerido', field: 'nombre' },
-                { status: 400 }
-            );
+        if (!state.email || !state.nombre) {
+            return NextResponse.json({ error: 'Faltan datos requeridos (email, nombre)' }, { status: 400 });
         }
 
-        // Build diagnosis components
-        const baseContext = generateContextoProyecto(diagnosis);
-        const executiveDiagnosis = generateExecutiveDiagnosis(diagnosis);
-        const actionPlans = generateAutomationActionPlans(diagnosis);
+        console.log(`[Diagnosis] Finalizing for ${state.email}...`);
 
-        // Step 1: Create or update lead in Volkern
-        console.log('[Diagnosis API] Processing lead in Volkern...');
+        // 1. CRM Lead Registration (Senior Version)
+        const lead = await registerLead({
+            nombre: state.nombre,
+            email: state.email,
+            telefono: state.telefono,
+            empresa: state.empresa,
+            contextoProyecto: generateContextoProyecto(state),
+            canal: 'web',
+            estado: 'nuevo'
+        });
 
-        const leadPayload = {
-            nombre: diagnosis.nombre,
-            email: diagnosis.email || undefined,
-            telefono: diagnosis.telefono || undefined,
-            empresa: diagnosis.empresa || undefined,
-            canal: 'web' as const,
-            estado: 'nuevo' as const,
-            contextoProyecto: baseContext, // ONLY the base diagnosis goes here
-        };
+        const leadId = lead.id;
+        console.log(`[Volkern] Lead registered/updated: ${leadId}`);
 
-        const leadResponse = await volkernClient.post<any>('/leads', leadPayload);
+        // 2. Generate Senior Narrative Assets
+        const executiveDiagnosis = generateExecutiveDiagnosis(state);
+        const formalProposal = generateCommercialProposal(state, { mode: 'aggressive' });
+        const script = generateStrategicSessionScript(state);
+        const briefing = generateConsultantExecutiveSummary(state);
+        const checklist = generateClosingChecklist(state);
 
-        // Extract leadId from nested response: leadResponse.lead.id
-        const leadId = leadResponse.lead?.id || leadResponse.id;
+        // 3. Register Assets as CRM Internal Notes (Sequential)
+        console.log('[Volkern] Registering analytical assets...');
+        const assets = [
+            { tipo: 'Plan de Automatización ABC', contenido: executiveDiagnosis },
+            { tipo: 'Propuesta Técnica Senior', contenido: formalProposal },
+            { tipo: 'Guion de Sesión Estratégica', contenido: script },
+            { tipo: 'Briefing para Consultor', contenido: briefing },
+            { tipo: 'Checklist de Cierre', contenido: checklist }
+        ];
 
-        if (!leadId) {
-            throw new Error('No se pudo obtener el ID del lead del CRM');
+        for (const asset of assets) {
+            await registerLeadInteraction(leadId, {
+                tipo: 'nota',
+                contenido: `[${asset.tipo}]\n\n${asset.contenido}`
+            });
         }
 
-        console.log('[Diagnosis API] Lead processed with ID:', leadId);
+        // 4. Email Delivery via Resend (Unified approach)
+        let emailSent = false;
+        try {
+            console.log('[Resend] Sending diagnosis email...');
 
-        // Step 2: Register Executive Diagnosis as Interaction Note
-        console.log('[Diagnosis API] Registering executive diagnosis note...');
-        await volkernClient.post<any>(`/leads/${leadId}/interactions`, {
-            tipo: 'nota',
-            contenido: executiveDiagnosis,
-            resultado: 'positivo',
-        });
+            await sendPostDiagnosisEmail(state.email, {
+                nombre: state.nombre,
+                dolorPrincipal: state.dolorPrincipal || 'No especificado',
+                procesoActual: state.procesoActual || 'No especificado',
+                objetivoNegocio: state.objetivoNegocio || 'No especificado',
+                planesIA: executiveDiagnosis,
+                linkAgenda: process.env.LINK_AGENDA || 'https://calendly.com/dimensionexpert/sesion-estrategica'
+            });
 
-        // Step 3: Register Action Plan as Interaction Note
-        console.log('[Diagnosis API] Registering action plan note...');
-        await volkernClient.post<any>(`/leads/${leadId}/interactions`, {
-            tipo: 'nota',
-            contenido: actionPlans,
-            resultado: 'positivo',
-        });
+            // Send internal notification alert
+            await sendInternalNotificationEmail({
+                nombre: state.nombre,
+                empresa: state.empresa || 'N/A',
+                prioridad: state.prioridad?.toString() || '5',
+                dolorPrincipal: state.dolorPrincipal || 'No especificado',
+                leadId: leadId
+            });
 
-        // Step 4: Create follow-up task (+24 hours)
-        console.log('[Diagnosis API] Creating call task...');
-
-        const dueDate = new Date();
-        dueDate.setHours(dueDate.getHours() + 24);
-
-        const taskPayload = {
-            tipo: 'llamada',
-            titulo: `Llamada seguimiento: ${diagnosis.nombre}`,
-            descripcion: `RECORADATORIO DE LLAMADA (24h): Contactar a ${diagnosis.nombre} (${diagnosis.empresa}) para revisar diagnóstico ejecutivo y planes de acción de automatización.`,
-            prioridad: 'alta',
-            fechaVencimiento: dueDate.toISOString(),
-        };
-
-        const taskResponse = await volkernClient.post<any>(`/leads/${leadId}/tasks`, taskPayload);
-
-        console.log('[Diagnosis API] Task created successfully:', taskResponse.id || 'OK');
-
-        // Step 5: Send Confirmation Email to Client
-        if (diagnosis.email) {
-            console.log(`[Diagnosis API] Sending email to ${diagnosis.email}...`);
-
-            if (!process.env.RESEND_API_KEY) {
-                console.error('[Diagnosis API] RESEND_API_KEY is missing. Email skipped.');
-            } else {
-                try {
-                    const resend = new Resend(process.env.RESEND_API_KEY);
-                    const emailHtml = getDiagnosisEmailHtml(diagnosis, executiveDiagnosis, actionPlans);
-                    await resend.emails.send({
-                        from: 'Dimension Expert <diagnostico@dimension.expert>',
-                        to: diagnosis.email,
-                        subject: `Tu Diagnóstico de Automatización - ${diagnosis.empresa}`,
-                        html: emailHtml,
-                    });
-                    console.log('[Diagnosis API] Email sent successfully');
-                } catch (emailError) {
-                    console.error('[Diagnosis API] Error sending email:', emailError);
-                }
-            }
+            emailSent = true;
+            console.log('[Resend] Emails sent successfully');
+        } catch (emailError) {
+            console.error('[Resend] Error sending emails:', emailError);
         }
 
         return NextResponse.json({
             success: true,
-            leadId: leadId,
-            taskId: taskResponse.id || 'N/A',
-            message: 'Diagnóstico guardado con éxito (Lead, Notas, Tarea y Email enviados)',
+            leadId,
+            emailSent,
+            message: 'Diagnóstico completado y registrado correctamente.'
         });
 
     } catch (error) {
-        console.error('[Diagnosis API] Error:', error);
-
-        const errorMessage = error instanceof Error ? error.message : String(error);
-
-        return NextResponse.json(
-            {
-                error: 'Error al procesar el diagnóstico',
-                details: errorMessage,
-            },
-            { status: 500 }
-        );
+        console.error('[Diagnosis Error]', error);
+        return NextResponse.json({
+            error: 'Error al procesar el diagnóstico',
+            details: error instanceof Error ? error.message : String(error)
+        }, { status: 500 });
     }
-}
-
-// Debug endpoint to check configuration
-export async function GET() {
-    return NextResponse.json({
-        baseUrl: process.env.VOLKERN_BASE_URL || 'https://volkern.app/api',
-        keyConfigured: !!process.env.VOLKERN_API_KEY,
-        keyPreview: process.env.VOLKERN_API_KEY ? `${process.env.VOLKERN_API_KEY.substring(0, 8)}...` : 'NOT SET',
-    });
 }

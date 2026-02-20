@@ -24,6 +24,7 @@ export function DiagnosisChat() {
         taskId?: string;
         error?: string;
     } | null>(null);
+    const [hasPendingSync, setHasPendingSync] = useState(false);
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -79,7 +80,40 @@ export function DiagnosisChat() {
         };
 
         initConversation();
+
+        // Check for pending sync
+        const pending = localStorage.getItem('pending_diagnosis');
+        if (pending) {
+            setHasPendingSync(true);
+        }
     }, []);
+
+    const syncPendingData = async () => {
+        const pending = localStorage.getItem('pending_diagnosis');
+        if (!pending) return;
+
+        try {
+            const state = JSON.parse(pending);
+            setIsSubmitting(true);
+            setIsTyping(true);
+
+            const syncingMessage: Message = {
+                id: crypto.randomUUID(),
+                role: 'assistant',
+                content: '🔄 Detectamos un diagnóstico pendiente. Intentando sincronizar con el CRM...',
+                timestamp: new Date(),
+            };
+            setMessages(prev => [...prev, syncingMessage]);
+
+            await handleDiagnosisComplete(state, true);
+        } catch (error) {
+            console.error('Error parsing pending diagnosis:', error);
+            localStorage.removeItem('pending_diagnosis');
+            setHasPendingSync(false);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
 
     const handleSubmit = async (e?: React.FormEvent) => {
         e?.preventDefault();
@@ -143,19 +177,21 @@ export function DiagnosisChat() {
         }
     };
 
-    const handleDiagnosisComplete = async (state: DiagnosisState) => {
-        setIsTyping(true);
-        await delay(500);
+    const handleDiagnosisComplete = async (state: DiagnosisState, isSyncing = false) => {
+        if (!isSyncing) {
+            setIsTyping(true);
+            await delay(500);
 
-        const completionMessage: Message = {
-            id: crypto.randomUUID(),
-            role: 'assistant',
-            content: '¡Excelente! He recopilado toda la información necesaria. Ahora te muestro el resumen de tu diagnóstico y lo guardaré en nuestro sistema.',
-            timestamp: new Date(),
-        };
+            const completionMessage: Message = {
+                id: crypto.randomUUID(),
+                role: 'assistant',
+                content: '¡Excelente! He recopilado toda la información necesaria. Ahora te muestro el resumen de tu diagnóstico y lo guardaré en nuestro sistema.',
+                timestamp: new Date(),
+            };
 
-        setMessages(prev => [...prev, completionMessage]);
-        setIsTyping(false);
+            setMessages(prev => [...prev, completionMessage]);
+            setIsTyping(false);
+        }
 
         // Submit to API
         setIsSubmitting(true);
@@ -176,12 +212,16 @@ export function DiagnosisChat() {
                     taskId: data.taskId,
                 });
 
+                // Clear local storage on success
+                localStorage.removeItem('pending_diagnosis');
+                setHasPendingSync(false);
+
                 await delay(500);
 
                 const successMessage: Message = {
                     id: crypto.randomUUID(),
                     role: 'assistant',
-                    content: '✅ Tu información ha sido guardada correctamente. Un miembro de nuestro equipo se pondrá en contacto contigo en las próximas 24 horas para revisar tu diagnóstico y discutir las mejores soluciones para tu negocio.',
+                    content: '✅ Tu información ha sido guardada correctamente en el CRM. Un miembro de nuestro equipo se pondrá en contacto contigo en las próximas 24 horas para revisar tu diagnóstico.',
                     timestamp: new Date(),
                 };
 
@@ -190,15 +230,21 @@ export function DiagnosisChat() {
                 throw new Error(data.error || 'Error al guardar');
             }
         } catch (error) {
+            const errorMsg = error instanceof Error ? error.message : 'Error desconocido';
+
+            // SAVE LOCALLY ON FAILURE
+            localStorage.setItem('pending_diagnosis', JSON.stringify(state));
+            setHasPendingSync(true);
+
             setSubmissionResult({
                 success: false,
-                error: error instanceof Error ? error.message : 'Error desconocido',
+                error: errorMsg,
             });
 
             const errorMessage: Message = {
                 id: crypto.randomUUID(),
                 role: 'assistant',
-                content: '⚠️ Hubo un problema al guardar tu información. No te preocupes, hemos registrado tu diagnóstico localmente. Por favor, contacta con nosotros directamente.',
+                content: `⚠️ Hubo un problema al guardar tu información: "${errorMsg}". Tu diagnóstico ha sido guardado localmente en tu navegador. Puedes intentar sincronizarlo de nuevo cuando el problema se resuelva.`,
                 timestamp: new Date(),
             };
 
@@ -233,6 +279,19 @@ export function DiagnosisChat() {
                     />
                     <h1>Diagnóstico de Automatización</h1>
                     <p>Descubre cómo la IA puede transformar tu negocio</p>
+
+                    {hasPendingSync && (
+                        <button
+                            onClick={syncPendingData}
+                            disabled={isSubmitting}
+                            className="mt-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold py-2 px-4 rounded-full flex items-center gap-2 shadow-lg animate-pulse"
+                        >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                                <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
+                            </svg>
+                            SINCRONIZAR DATOS PENDIENTES
+                        </button>
+                    )}
                 </div>
             </header>
 

@@ -36,18 +36,18 @@ export interface CreateLeadPayload {
  * - estado options: 'nuevo', 'contactado', 'calificado', 'negociacion', 'cliente', 'perdido'
  */
 export async function upsertLeadFromDiagnosis(diagnosis: DiagnosisState): Promise<Lead> {
-    // Build tags array including industry
-    const etiquetas = ['diagnostico-ia'];
+    // Build tags array including industry and automation context
+    const tags = ['diagnostico-ia', 'fuente-chat-web', 'motor-volkern-ai'];
+
     if (diagnosis.industria) {
-        etiquetas.push(diagnosis.industria.toLowerCase().replace(/\s+/g, '-'));
+        tags.push(`industria-${diagnosis.industria.toLowerCase().replace(/\s+/g, '-')}`);
     }
 
-    // Add urgency tag if priority is high
     if (diagnosis.prioridad && parseInt(diagnosis.prioridad) >= 8) {
-        etiquetas.push('urgente');
+        tags.push('urgente');
     }
 
-    const payload: CreateLeadPayload = {
+    const payload: CreateLeadPayload & { tags?: string[] } = {
         nombre: diagnosis.nombre!,
         email: diagnosis.email,
         telefono: diagnosis.telefono,
@@ -55,9 +55,22 @@ export async function upsertLeadFromDiagnosis(diagnosis: DiagnosisState): Promis
         canal: 'web',
         estado: 'nuevo',
         contextoProyecto: generateContextoProyecto(diagnosis),
+        tags: tags // Note: confirming if the API accepts tags in the payload or needs a separate call
     };
 
-    return volkernClient.post<Lead>('/leads', payload);
+    const response = await volkernClient.post<{ success: boolean; lead: Lead }>('/leads', payload);
+    return response.lead || (response as any as Lead);
+}
+
+/**
+ * Register a lead with basic payload
+ * 
+ * Per VOLKERN_SKILL.md:
+ * - POST /api/leads
+ */
+export async function registerLead(payload: CreateLeadPayload): Promise<Lead> {
+    const response = await volkernClient.post<{ success: boolean; lead: Lead }>('/leads', payload);
+    return response.lead || (response as any as Lead);
 }
 
 /**
@@ -68,12 +81,12 @@ export async function upsertLeadFromDiagnosis(diagnosis: DiagnosisState): Promis
  */
 export async function searchLeadByEmail(email: string): Promise<Lead | null> {
     try {
-        const response = await volkernClient.get<{ data: Lead[]; total: number }>('/leads', {
+        const response = await volkernClient.get<{ success: boolean; data: Lead[]; total: number }>('/leads', {
             search: email,
             limit: '1',
         });
 
-        return response.data.length > 0 ? response.data[0] : null;
+        return response.data && response.data.length > 0 ? response.data[0] : null;
     } catch {
         return null;
     }
@@ -86,7 +99,8 @@ export async function searchLeadByEmail(email: string): Promise<Lead | null> {
  * - GET /api/leads/{id}
  */
 export async function getLeadById(leadId: string): Promise<Lead> {
-    return volkernClient.get<Lead>(`/leads/${leadId}`);
+    const response = await volkernClient.get<{ success: boolean; lead: Lead }>(`/leads/${leadId}`);
+    return response.lead || (response as any as Lead);
 }
 
 /**
@@ -99,5 +113,34 @@ export async function updateLeadStatus(
     leadId: string,
     estado: 'nuevo' | 'contactado' | 'calificado' | 'negociacion' | 'cliente' | 'perdido'
 ): Promise<Lead> {
-    return volkernClient.patch<Lead>(`/leads/${leadId}`, { estado });
+    const response = await volkernClient.patch<{ success: boolean; lead: Lead }>(`/leads/${leadId}`, { estado });
+    return response.lead || (response as any as Lead);
+}
+/**
+ * Register an interaction (Internal Note) for a lead
+ * 
+ * Note: My tests show that /notes is the working endpoint for internal notes
+ * in this Volkern environment.
+ */
+export async function registerLeadInteraction(
+    leadId: string,
+    payload: {
+        tipo: 'llamada' | 'email' | 'reunion' | 'nota';
+        contenido: string;
+        resultado?: 'positivo' | 'negativo' | 'neutral';
+    }
+): Promise<any> {
+    // We Map 'nota' to /notes endpoint. 
+    // If it's a note, we use the specific notes endpoint which is more reliable.
+    if (payload.tipo === 'nota') {
+        return volkernClient.post(`/leads/${leadId}/notes`, {
+            contenido: payload.contenido
+        });
+    }
+
+    // For other types, we might still need a general interactions endpoint 
+    // but based on user feedback, notes are the priority.
+    return volkernClient.post(`/leads/${leadId}/notes`, {
+        contenido: `[${payload.tipo.toUpperCase()}] ${payload.contenido}`
+    });
 }

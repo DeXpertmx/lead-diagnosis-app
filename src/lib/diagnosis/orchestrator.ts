@@ -1,18 +1,5 @@
-import { DIAGNOSIS_QUESTIONS, Question, TOTAL_QUESTIONS } from './questions';
+import { DIAGNOSIS_QUESTIONS, TOTAL_QUESTIONS, Question } from './questions';
 import { validateEmail, validatePriority, validateRequired, validatePhone } from './validators';
-
-export { TOTAL_QUESTIONS };
-
-/**
- * Interface for an Action Plan
- */
-export interface ActionPlan {
-    id: string;
-    title: string;
-    description: string;
-    steps: string[];
-    benefit: string;
-}
 
 export interface DiagnosisState {
     nombre?: string;
@@ -30,240 +17,277 @@ export interface DiagnosisState {
     terminosYCondiciones?: string;
 }
 
-export interface ProcessResult {
+// Re-export constants for easy access
+export { TOTAL_QUESTIONS };
+
+/**
+ * Get the next unanswered question based on the current state
+ */
+export function getNextQuestion(state: DiagnosisState): Question | undefined {
+    return DIAGNOSIS_QUESTIONS.find(q => !state[q.field]);
+}
+
+/**
+ * Process a user answer, validate it and update the state
+ */
+export function processAnswer(state: DiagnosisState, answer: string): {
     valid: boolean;
-    error?: string;
+    nextState: DiagnosisState;
     updates?: Partial<DiagnosisState>;
-}
-
-/**
- * Get the next unanswered question based on current state
- */
-export function getNextQuestion(state: DiagnosisState): Question | null {
-    for (const question of DIAGNOSIS_QUESTIONS) {
-        const fieldValue = state[question.field];
-        if (fieldValue === undefined || fieldValue === '') {
-            return question;
-        }
-    }
-    return null;
-}
-
-/**
- * Get the current question number (1-indexed)
- */
-export function getCurrentQuestionNumber(state: DiagnosisState): number {
-    const answeredCount = DIAGNOSIS_QUESTIONS.filter(
-        q => state[q.field] !== undefined && state[q.field] !== ''
-    ).length;
-    return answeredCount + 1;
-}
-
-/**
- * Process user answer and validate
- */
-export function processAnswer(state: DiagnosisState, answer: string): ProcessResult {
+    error?: string;
+    currentQuestion?: Question;
+} {
     const currentQuestion = getNextQuestion(state);
 
     if (!currentQuestion) {
-        return { valid: false, error: 'No hay más preguntas pendientes.' };
+        return { valid: false, nextState: state, error: 'El diagnóstico ya se ha completado.' };
     }
 
-    // Validate based on type
-    const trimmedAnswer = answer.trim();
-
-    switch (currentQuestion.validation) {
-        case 'email':
-            if (!validateEmail(trimmedAnswer)) {
-                return {
-                    valid: false,
-                    error: 'Por favor, ingresa un correo electrónico válido (ej: tu@email.com)'
-                };
-            }
-            break;
-
-        case 'priority':
-            if (!validatePriority(trimmedAnswer)) {
-                return {
-                    valid: false,
-                    error: 'Por favor, ingresa un número del 1 al 10'
-                };
-            }
-            break;
-
-        case 'phone':
-            if (!validatePhone(trimmedAnswer)) {
-                return {
-                    valid: false,
-                    error: 'Por favor, ingresa un número de teléfono válido (mínimo 8 dígitos)'
-                };
-            }
-            break;
-
-        case 'required':
-        default:
-            if (!validateRequired(trimmedAnswer)) {
-                return {
-                    valid: false,
-                    error: 'Por favor, responde a esta pregunta para continuar'
-                };
-            }
-            break;
+    // Validate based on question type
+    let isValid = true;
+    if (currentQuestion.validation === 'email') {
+        isValid = validateEmail(answer);
+    } else if (currentQuestion.validation === 'priority') {
+        isValid = validatePriority(answer);
+    } else if (currentQuestion.validation === 'phone') {
+        isValid = validatePhone(answer);
+    } else {
+        isValid = validateRequired(answer);
     }
+
+    if (!isValid) {
+        let errorMessage = 'Por favor, introduce una respuesta válida.';
+        if (currentQuestion.validation === 'email') errorMessage = 'Correo electrónico no válido.';
+        if (currentQuestion.validation === 'priority') errorMessage = 'Por favor, elige un número del 1 al 10.';
+
+        return { valid: false, nextState: state, error: errorMessage, currentQuestion };
+    }
+
+    const nextState = { ...state, [currentQuestion.field]: answer.trim() };
 
     return {
         valid: true,
-        updates: {
-            [currentQuestion.field]: trimmedAnswer,
-        },
+        nextState,
+        updates: { [currentQuestion.field]: answer.trim() },
+        currentQuestion
     };
 }
 
 /**
- * Check if all questions have been answered
+ * Senior Analysis Helper: Transforms raw user input into a business value narrative
  */
-export function isComplete(state: DiagnosisState): boolean {
-    return DIAGNOSIS_QUESTIONS.every(
-        q => state[q.field] !== undefined && state[q.field] !== ''
-    );
-}
+const synthesizeNarrative = (state: DiagnosisState) => {
+    const { dolorPrincipal, perdidasActuales, objetivoNegocio, procesoActual } = state;
+
+    return {
+        oportunidad: `Transformar la ineficiencia detectada en ${procesoActual} en un motor de crecimiento escalable.`,
+        riesgoFinanciero: `Mantener el esquema actual representa un drenaje de recursos proyectado en ${perdidasActuales}, lo que compromete la agilidad operativa necesaria para competir en el sector.`,
+        visionSolucion: `Implementar una arquitectura de automatización centrada en resultados para alcanzar el objetivo de ${objetivoNegocio}, eliminando la fricción de ${dolorPrincipal}.`
+    };
+};
 
 /**
- * Generate structured summary text for the diagnosis
- */
-export function generateSummary(state: DiagnosisState): string {
-    const sections = [
-        `## Datos de Contacto`,
-        `- **Nombre:** ${state.nombre}`,
-        `- **Email:** ${state.email}`,
-        `- **Teléfono:** ${state.telefono || 'No proporcionado'}`,
-        `- **Empresa:** ${state.empresa}`,
-        `- **Industria:** ${state.industria}`,
-        ``,
-        `## Situación Actual`,
-        `- **Proceso actual:** ${state.procesoActual}`,
-        `- **Tareas manuales:** ${state.procesosManuales}`,
-        ``,
-        `## Problemática`,
-        `- **Dolor principal:** ${state.dolorPrincipal}`,
-        `- **Pérdidas actuales:** ${state.perdidasActuales}`,
-        `- **Consecuencia a 6 meses:** ${state.consecuencia6Meses}`,
-        ``,
-        `## Objetivos`,
-        `- **Objetivo de negocio:** ${state.objetivoNegocio}`,
-        `- **Prioridad:** ${state.prioridad}/10`,
-        `- **Términos y Condiciones:** ${state.terminosYCondiciones || 'No aceptados'}`,
-        ``,
-        `---`,
-        `*Diagnóstico generado automáticamente el ${new Date().toLocaleDateString('es-ES')}*`,
-    ];
-
-    return sections.join('\n');
-}
-
-/**
- * Generate 3 tiered automation action plans based on diagnosis
+ * Generate a professional Executive Diagnosis summary (Senior Analyst version)
+ * This is the main output for the Client Roadmap
  */
 export function generateAutomationActionPlans(state: DiagnosisState): string {
+    const narrative = synthesizeNarrative(state);
     const empresa = state.empresa || 'Empresa';
-    const dolor = state.dolorPrincipal || 'procesos manuales';
 
     return `
-PROPUESTA DE PLANES DE ACCIÓN: ${empresa.toUpperCase()}
+HOJA DE RUTA ESTRATÉGICA: ${empresa.toUpperCase()}
 ==================================================
 
-PLAN A: IMPLEMENTACIÓN INMEDIATA (QUICK WINS)
---------------------------------------------
-Objetivo: Mitigar el dolor principal (${dolor}) de forma rápida.
-1. Automatización de entrada de datos básica usando herramientas No-Code.
-2. Centralización de contactos en Volkern CRM.
-3. Configuración de respuestas automáticas iniciales en WhatsApp.
-Beneficio: Reducción inmediata de la carga operativa inicial en un 20-30%.
+FASE A: OPTIMIZACIÓN DE CAPITAL OPERATIVO (QUICK WINS)
+--------------------------------------------------
+Objetivo: Detener el drenaje de recursos y liberar ancho de banda crítico.
+* Enfoque: Atacar directamente la fricción de "${state.dolorPrincipal}".
+* Acción: Automatización inteligente del flujo de "${state.procesoActual}" mediante integración de sistemas existentes y eliminación de cuellos de botella manuales.
+* Impacto: Recuperación inmediata de eficiencia operativa y redireccionamiento del talento humano a tareas de alto valor.
 
-PLAN B: TRANSFORMACIÓN INTEGRAL (CORE AUTOMATION)
---------------------------------------------
-Objetivo: Optimizar el proceso completo de ${state.procesoActual || 'operaciones'}.
-1. Integración profunda de flujos de trabajo entre departamentos.
-2. Automatización del ciclo de vida del cliente (Lead -> Venta -> Post-venta).
-3. Implementación de dashboards de métricas en tiempo real.
-Beneficio: Aumento de la eficiencia operativa en un 50% y eliminación de errores humanos.
+FASE B: TRANSFORMACIÓN DE PROCESOS (CORE AUTOMATION)
+--------------------------------------------------
+Objetivo: Rediseñar la infraestructura para la escalabilidad.
+* Enfoque: Convertir "${state.procesosManuales}" en un sistema autónomo y predecible.
+* Acción: Orquestación end-to-end del ciclo de vida operativo, garantizando la integridad de datos y la trazabilidad total.
+* Impacto: Reducción del error humano al 0% y capacidad de absorber 3x volumen de operación sin aumentar costos fijos.
 
-PLAN C: ESCALAMIENTO Y FUTURO (AI-ENABLED)
---------------------------------------------
-Objetivo: Alineación con el objetivo estratégico: ${state.objetivoNegocio || 'Crecimiento inteligente'}.
-1. Agentes de IA dedicados para atención al cliente 24/7.
-2. Análisis predictivo de ventas y comportamiento del cliente.
-3. Automatización avanzada impulsada por modelos de lenguaje específicos.
-Beneficio: Ventaja competitiva sostenible y escalabilidad infinita sin aumentar proporcionalmente la plantilla.
+FASE C: VENTAJA COMPETITIVA BASADA EN IA (AI-ENABLED)
+--------------------------------------------------
+Objetivo: Posicionamiento como líder tecnológico en el sector.
+* Enfoque: Alineación total con la visión de "${state.objetivoNegocio}".
+* Acción: Despliegue de agentes inteligentes y análisis predictivo para anticipar necesidades del mercado y personalizar la experiencia del cliente a escala.
+* Impacto: Creación de un foso competitivo inalcanzable para competidores tradicionales.
 
 ---
-Análisis generado automáticamente por Volkern AI
-Fecha de análisis: ${new Date().toLocaleDateString('es-ES')}
-`.trim();
-}
-
-/**
- * Generate a professional Executive Diagnosis summary
- * Based on the 4-point business structure
- */
-export function generateExecutiveDiagnosis(state: DiagnosisState): string {
-    return `
-DIAGNÓSTICO EJECUTIVO: ${state.empresa?.toUpperCase() || 'EMPRESA'}
-==================================================
-
-1. RESUMEN DE LA SITUACIÓN ACTUAL
-Estructura operativa en el sector ${state.industria || 'no especificado'}. 
-Situación actual: ${state.procesoActual}
-
-2. DESAFÍOS OPERATIVOS IDENTIFICADOS
-El cliente reporta una carga significativa en tareas manuales: ${state.procesosManuales}.
-Punto crítico (Dolor): ${state.dolorPrincipal}
-
-3. IMPACTO DE NO ACTUAR
-Pérdidas actuales estimadas: ${state.perdidasActuales}.
-Proyección a 6 meses sin intervención: ${state.consecuencia6Meses}.
-
-4. ALINEACIÓN CON OBJETIVOS DE NEGOCIO
-Objetivo estratégico: ${state.objetivoNegocio}.
-Nivel de urgencia: ${state.prioridad}/10.
-
----
-Generado por Volkern Diagnosis Engine
+Análisis Estratégico diseñado por el Motor de Diagnóstico Senior - Volkern AI
 Fecha: ${new Date().toLocaleDateString('es-ES')}
 `.trim();
 }
 
 /**
- * Generate contextoProyecto for Volkern CRM
+ * Alias for generateAutomationActionPlans to maintain compatibility with DiagnosisChat
+ */
+export const generateExecutiveDiagnosis = generateAutomationActionPlans;
+
+/**
+ * Generate a simple text summary of the chat answers
+ */
+export function generateSummary(state: DiagnosisState): string {
+    return `
+Resumen del Diagnóstico:
+-----------------------
+Empresa: ${state.empresa}
+Sector: ${state.industria}
+Prioridad: ${state.prioridad}/10
+Meta: ${state.objetivoNegocio}
+Proceso: ${state.procesoActual}
+Manuales: ${state.procesosManuales}
+Dolor: ${state.dolorPrincipal}
+Pérdidas: ${state.perdidasActuales}
+Riesgo 6m: ${state.consecuencia6Meses}
+`.trim();
+}
+
+/**
+ * Generate contextoProyecto for Volkern CRM (Senior Analyst Version)
  */
 export function generateContextoProyecto(state: DiagnosisState): string {
+    const narrative = synthesizeNarrative(state);
     return `
-DIAGNÓSTICO DE AUTOMATIZACIÓN
-=============================
+--- ANÁLISIS DE NEGOCIO SENIOR ---
+ESTADO DE SITUACIÓN: ${state.procesoActual}
+DESAFÍO CRÍTICO: ${state.dolorPrincipal}
+Fuga de Valor Detectada: ${state.perdidasActuales}
 
-EMPRESA: ${state.empresa}
-INDUSTRIA: ${state.industria}
-PRIORIDAD: ${state.prioridad}/10
+OBJETIVO ESTRATÉGICO: ${state.objetivoNegocio}
+PRIORIDAD DE IMPLEMENTACIÓN: ${state.prioridad}/10
 
-PROCESO ACTUAL:
-${state.procesoActual}
+DIAGNÓSTICO TÉCNICO:
+El lead reporta ineficiencia severa en ${state.procesosManuales}. El riesgo de no actuar en 6 meses conlleva: ${state.consecuencia6Meses}.
 
-TAREAS MANUALES:
-${state.procesosManuales}
+VISIÓN: ${narrative.visionSolucion}
+`.trim();
+}
 
-DOLOR PRINCIPAL:
-${state.dolorPrincipal}
+/**
+ * Generate a high-impact session script for the consultant
+ */
+export function generateStrategicSessionScript(state: DiagnosisState): string {
+    const { nombre, empresa, dolorPrincipal, objetivoNegocio, perdidasActuales } = state;
 
-PÉRDIDAS ACTUALES:
-${state.perdidasActuales}
+    return `
+GUION CONSULTIVO: SESIÓN ESTRATÉGICA - ${nombre?.toUpperCase()}
+==================================================
 
-CONSECUENCIA SI NO SE ACTÚA (6 meses):
-${state.consecuencia6Meses}
+1. ENCUADRE DE VALOR (2 MIN)
+---------------------------
+- "Hola ${nombre}, he analizado detenidamente tu diagnóstico para ${empresa}. Mi objetivo hoy no es hablar del 'qué' hacemos, sino del 'cómo' tu negocio puede recuperar el control de su tiempo y crecimiento."
+- "He identificado que hoy estás pagando un 'impuesto a la ineficiencia' de ${perdidasActuales}. Vamos a ver cómo eliminarlo."
 
-OBJETIVO DE NEGOCIO:
-${state.objetivoNegocio}
+2. VALIDACIÓN DEL IMPACTO (5 MIN)
+-------------------------------
+- "${nombre}, mencionaste que ${dolorPrincipal} es tu mayor freno hoy. Más allá del tiempo, ¿qué oportunidades de negocio estás dejando pasar por estar resolviendo esto manualmente?"
+- "Si logramos que ${state.procesoActual} sea automático por completo, ¿cuánto cambiaría tu capacidad para alcanzar ese objetivo de ${objetivoNegocio}?"
+
+3. LA NARRATIVA DE SOLUCIÓN (8 MIN)
+----------------------------------
+- "No necesitas más software, necesitas una arquitectura de resultados. He diseñado 3 niveles:"
+- "[FASE A] Quick Wins: Liberar el cuello de botella en ${state.procesoActual}."
+- "[FASE B] Optimización: Blindar tu operación contra el error humano y la saturación."
+- "[FASE C] IA: Escalar tu visión de ${objetivoNegocio} sin límites operativos."
+
+4. CIERRE DE COMPROMISO (5 MIN)
+------------------------------
+- "¿Prefieres seguir gestionando la complejidad manualmente o estás listo para que la tecnología trabaje para ${empresa}?"
+- "El siguiente hito es definir el mapa técnico. ¿Lo hacemos?"
+`.trim();
+}
+
+/**
+ * Lead briefing for the consultant
+ */
+export function generateConsultantExecutiveSummary(state: DiagnosisState): string {
+    return `
+BRIEFING: LEAD ${state.nombre} (${state.empresa})
+--------------------------------------------------
+- KPI EN RIESGO: ${state.perdidasActuales}
+- BARRERA CRÍTICA: ${state.dolorPrincipal}
+- VISIÓN DE ÉXITO: ${state.objetivoNegocio}
+- PERFIL: Requiere visión de retorno de inversión, no explicaciones técnicas de herramienta.
+- ESTRATEGIA: Focar la conversación en el costo de oportunidad y escalabilidad.
+`.trim();
+}
+
+/**
+ * Session closing checklist
+ */
+export function generateClosingChecklist(state: DiagnosisState): string {
+    return `
+CHECKLIST CIERRE ESTRATÉGICO - ${state.empresa}
+-----------------------------------------------
+[ ] Confirmación del dolor financiero (${state.perdidasActuales})
+[ ] Validación de la urgencia estratégica (${state.prioridad}/10)
+[ ] Aceptación del Roadmap A -> B -> C
+[ ] Definición de Propietario del Proyecto por parte del cliente
+`.trim();
+}
+
+export interface ProposalOptions {
+    version?: string;
+    mode: 'conservative' | 'aggressive';
+    consultationNotes?: string;
+    inversion?: string;
+    tiempoEstimado?: string;
+}
+
+/**
+ * Generate a structured commercial proposal (Senior Analyst Narrative)
+ */
+export function generateCommercialProposal(state: DiagnosisState, options: ProposalOptions): string {
+    const { version = 'v1' } = options;
+    const narrative = synthesizeNarrative(state);
+
+    return `
+# PROPUESTA DE TRANSFORMACIÓN OPERATIVA E IA
+**Cliente: ${state.empresa?.toUpperCase()} | Versión: ${version.toUpperCase()}**
+
+## 1. RESUMEN EJECUTIVO
+Basado en nuestro diagnóstico inicial, **${state.empresa}** presenta una oportunidad crítica para optimizar su capital operativo mediante la automatización de procesos. Hoy, el foco está diluido en tareas tácticas en **${state.industria}**, impidiendo el escalamiento estratégico hacia **${state.objetivoNegocio}**.
+
+## 2. ANÁLISIS DE IMPACTO Y RETORNO (ROI)
+Su esquema de trabajo actual enfocado en *${state.procesoActual}* genera una fricción operativa que se traduce en:
+- **Impacto Económico:** Pérdida de recursos estimada en ${state.perdidasActuales}.
+- **Costo de Oportunidad:** Limitación técnica para absorber crecimiento acelerado.
+- **Riesgo Estratégico:** ${state.consecuencia6Meses}.
+
+## 3. HOJA DE RUTA DE RESULTADOS
+Proponemos un despliegue por fases orientado a hitos de negocio:
+
+### FASE 1: ESTABILIZACIÓN Y EFICIENCIA (Semanas 1-4)
+- **Foco:** Solventar la problemática de "${state.dolorPrincipal}".
+- **Entregable:** Arquitectura de automatización core y liberación de carga manual.
+
+### FASE 2: ESCALABILIDAD OPERATIVA (Semanas 5-8)
+- **Foco:** Transformar "${state.procesosManuales}" en un asset tecnológico.
+- **Entregable:** Dashboard de control y flujos dinámicos de información.
+
+### FASE 3: INTELIGENCIA APLICADA (Semanas 9+)
+- **Foco:** Implementación de IA para alcanzar ${state.objetivoNegocio}.
+- **Entregable:** Agentes de IA y motores predictivos personalizados.
+
+## 4. INVERSIÓN Y PRÓXIMOS PASOS
+Nuestra propuesta es de socio tecnológico, no de proveedor de licencias. Buscamos el éxito de su objetivo de negocio.
+- **Próximo Paso:** Validación de Alcance Técnico y Kick-off del proyecto.
 
 ---
-Generado: ${new Date().toISOString()}
-  `.trim();
+**Dimension eXpert - Consultoría de Automatización de Alto Impacto**
+`.trim();
+}
+
+/**
+ * Check if the diagnosis state is complete (all required fields filled)
+ */
+export function isComplete(state: DiagnosisState): boolean {
+    return getNextQuestion(state) === undefined;
 }

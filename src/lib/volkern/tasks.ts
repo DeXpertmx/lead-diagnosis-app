@@ -42,7 +42,8 @@ export async function createCallTask(leadId: string): Promise<Task> {
         fechaVencimiento: dueDate.toISOString(),
     };
 
-    return volkernClient.post<Task>(`/leads/${leadId}/tasks`, payload);
+    const response = await volkernClient.post<{ success: boolean; task: Task }>(`/leads/${leadId}/tasks`, payload);
+    return response.task || (response as any as Task);
 }
 
 /**
@@ -58,7 +59,8 @@ export async function createTask(leadId: string, task: CreateTaskPayload): Promi
         throw new Error(`Tipo de tarea inválido: ${task.tipo}. Debe ser uno de: ${validTipos.join(', ')}`);
     }
 
-    return volkernClient.post<Task>(`/leads/${leadId}/tasks`, task);
+    const response = await volkernClient.post<{ success: boolean; task: Task }>(`/leads/${leadId}/tasks`, task);
+    return response.task || (response as any as Task);
 }
 
 /**
@@ -80,10 +82,11 @@ export async function listLeadTasks(leadId: string): Promise<Task[]> {
  * - Set completada: true
  */
 export async function completeTask(taskId: string): Promise<Task> {
-    return volkernClient.patch<Task>(`/tasks/${taskId}`, {
+    const response = await volkernClient.patch<{ success: boolean; task: Task }>(`/tasks/${taskId}`, {
         completada: true,
         fechaCompletado: new Date().toISOString(),
     });
+    return response.task || (response as any as Task);
 }
 
 /**
