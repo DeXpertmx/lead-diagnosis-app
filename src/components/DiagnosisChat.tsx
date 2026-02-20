@@ -402,12 +402,6 @@ function DiagnosisSummary({ state }: { state: DiagnosisState }) {
 
 // Executive Summary Component (Professional View)
 function ExecutiveSummary({ state }: { state: DiagnosisState }) {
-    const executiveMsg = generateExecutiveDiagnosis(state);
-
-    // Split the message to handle the 4 points better in UI
-    // Updated regex to include accented Spanish characters and ensure it captures headers correctly
-    const sections = executiveMsg.split(/(\d\.\s[A-Z\xC0-\xDF\s]+)/).filter(Boolean);
-
     return (
         <div className="executive-card bg-gradient-to-br from-white to-slate-50 border border-primary-500/30 rounded-xl p-6 shadow-xl overflow-hidden relative">
             <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
@@ -424,18 +418,15 @@ function ExecutiveSummary({ state }: { state: DiagnosisState }) {
                     <line x1="16" y1="17" x2="8" y2="17"></line>
                     <polyline points="10 9 9 9 8 9"></polyline>
                 </svg>
-                Diagnóstico Ejecutivo Profesional
+                Diagnóstico Ejecutivo en Proceso
             </h3>
 
             <div className="space-y-4 text-slate-700 text-sm leading-relaxed">
-                {sections.map((text, i) => {
-                    const isHeader = /^\d\.\s[A-Z\xC0-\xDF\s]+/.test(text);
-                    return (
-                        <div key={i} className={isHeader ? "text-primary-600 font-bold uppercase tracking-wider text-xs mt-4 mb-1" : "pl-4 border-l-2 border-primary-100 italic text-slate-600"}>
-                            {text.trim()}
-                        </div>
-                    );
-                })}
+                <div className="pl-4 border-l-2 border-primary-100 text-slate-600">
+                    <p className="mb-2"><strong>¡Gracias por compartir esta información detallada!</strong></p>
+                    <p className="mb-2">Nuestro Motor de IA ha recibido los datos de <strong>{state.empresa}</strong> y está construyendo actualmente el Diagnóstico Estratégico.</p>
+                    <p>En este reporte analizaremos el impacto de <em>{state.dolorPrincipal}</em> y estructuraremos una hoja de ruta orientada a resultados para alcanzar tu objetivo.</p>
+                </div>
             </div>
 
             <div className="mt-6 pt-4 border-t border-slate-700/50 flex justify-between items-center text-[10px] text-slate-500 uppercase tracking-widest">
