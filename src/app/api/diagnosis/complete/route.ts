@@ -107,6 +107,7 @@ export async function POST(req: NextRequest) {
 
         // 5. Email Delivery via Resend (Unified approach)
         let emailSent = false;
+        let emailErrorMsg = '';
         try {
             console.log('[Resend] Sending diagnosis email...');
 
@@ -132,6 +133,7 @@ export async function POST(req: NextRequest) {
             console.log('[Resend] Emails sent successfully');
         } catch (emailError) {
             console.error('[Resend] Error sending emails:', emailError);
+            emailErrorMsg = emailError instanceof Error ? emailError.message : String(emailError);
         }
 
         return NextResponse.json({
@@ -142,7 +144,8 @@ export async function POST(req: NextRequest) {
             taskSuccess,
             noteError: noteErrorMsg || undefined,
             taskError: taskErrorMsg || undefined,
-            message: 'Diagnóstico procesado. ' + (noteSuccess ? 'Nota guardada. ' : 'Error en nota. ') + (taskSuccess ? 'Tarea creada.' : 'Error en tarea.')
+            emailError: emailErrorMsg || undefined,
+            message: 'Diagnóstico procesado. ' + (noteSuccess ? 'Nota guardada. ' : 'Error en nota. ') + (taskSuccess ? 'Tarea creada. ' : 'Error en tarea. ') + (emailSent ? 'Correo enviado.' : 'Error en correo.')
         });
 
     } catch (error) {
