@@ -8,7 +8,8 @@ import {
     generateClosingChecklist,
     generateCommercialProposal
 } from '@/lib/diagnosis/orchestrator';
-import { registerLead, registerLeadInteraction, createTask } from '@/lib/volkern/leads';
+import { registerLead, registerLeadInteraction } from '@/lib/volkern/leads';
+import { createTask } from '@/lib/volkern/tasks';
 import { sendPostDiagnosisEmail, sendInternalNotificationEmail } from '@/lib/email/resend';
 
 import OpenAI from 'openai';
@@ -84,21 +85,24 @@ export async function POST(req: NextRequest) {
         }
 
         // 4. Create Follow-up Task (24 hours)
+        let taskSuccess = false;
+        let taskErrorMsg = '';
         try {
             console.log('[Volkern] Creating 24h follow-up task...');
             const tomorrow = new Date();
             tomorrow.setDate(tomorrow.getDate() + 1);
 
-            await createTask({
-                titulo: `Follow-up 24h: Diagnóstico de Integración IA para ${state.empresa || state.nombre}`,
-                descripcion: `Contactar a ${state.nombre} para agendar Sesión Estratégica. El lead tiene un dolor principal: ${state.dolorPrincipal || 'no especificado'}. Consultar Briefing para más detalles.`,
-                prioridad: parseInt(state.prioridad || '5', 10) >= 8 ? 'urgente' : 'alta',
+            await createTask(leadId, {
+                tipo: 'llamada',
+                titulo: `Follow-up 24h: Diagnóstico para ${state.empresa || state.nombre}`,
+                descripcion: `Contactar a ${state.nombre} para agendar Sesión Estratégica. Dolor principal: ${state.dolorPrincipal || 'no especificado'}. Prioridad: ${state.prioridad}/10.`,
                 fechaVencimiento: tomorrow.toISOString(),
-                leadId: leadId
             });
+            taskSuccess = true;
             console.log('[Volkern] Follow-up task created successfully');
         } catch (taskError) {
             console.error('[Volkern] Error creating follow-up task:', taskError);
+            taskErrorMsg = taskError instanceof Error ? taskError.message : String(taskError);
         }
 
         // 5. Email Delivery via Resend (Unified approach)
@@ -135,8 +139,10 @@ export async function POST(req: NextRequest) {
             leadId,
             emailSent,
             noteSuccess,
+            taskSuccess,
             noteError: noteErrorMsg || undefined,
-            message: 'Diagnóstico procesado. ' + (noteSuccess ? 'Nota guardada.' : 'Error en nota.')
+            taskError: taskErrorMsg || undefined,
+            message: 'Diagnóstico procesado. ' + (noteSuccess ? 'Nota guardada. ' : 'Error en nota. ') + (taskSuccess ? 'Tarea creada.' : 'Error en tarea.')
         });
 
     } catch (error) {
