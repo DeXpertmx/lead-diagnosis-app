@@ -32,8 +32,11 @@ export default function RootLayout({
                     rel="stylesheet"
                 />
             </head>
-            <body className="antialiased">
+            <body className="antialiased relative">
                 {children}
+                <div className="fixed bottom-2 right-2 text-xs text-slate-400/50 pointer-events-none z-50 select-none">
+                    v0.1.0
+                </div>
             </body>
         </html>
     );
