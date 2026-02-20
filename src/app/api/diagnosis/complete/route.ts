@@ -70,10 +70,18 @@ export async function POST(req: NextRequest) {
 
         // 3. Register Asset as CRM Internal Note
         console.log('[Volkern] Registering analytical asset...');
-        await registerLeadInteraction(leadId, {
-            tipo: 'nota',
-            contenido: `[Plan de Automatización ABC (Generado por IA)]\n\n${finalAIExecutiveDiagnosis}`
-        });
+        let noteSuccess = false;
+        let noteErrorMsg = '';
+        try {
+            await registerLeadInteraction(leadId, {
+                tipo: 'nota',
+                contenido: `[Plan de Automatización ABC (Generado por IA)]\n\n${finalAIExecutiveDiagnosis}`
+            });
+            noteSuccess = true;
+        } catch (noteError) {
+            console.error('[Volkern] Error registering note:', noteError);
+            noteErrorMsg = noteError instanceof Error ? noteError.message : String(noteError);
+        }
 
         // 4. Create Follow-up Task (24 hours)
         try {
@@ -126,7 +134,9 @@ export async function POST(req: NextRequest) {
             success: true,
             leadId,
             emailSent,
-            message: 'Diagnóstico completado y registrado correctamente.'
+            noteSuccess,
+            noteError: noteErrorMsg || undefined,
+            message: 'Diagnóstico procesado. ' + (noteSuccess ? 'Nota guardada.' : 'Error en nota.')
         });
 
     } catch (error) {
