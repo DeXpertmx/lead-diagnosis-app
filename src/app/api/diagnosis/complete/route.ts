@@ -11,13 +11,15 @@ import {
 import { registerLead, registerLeadInteraction, createTask } from '@/lib/volkern/leads';
 import { sendPostDiagnosisEmail, sendInternalNotificationEmail } from '@/lib/email/resend';
 
-import { GoogleGenAI } from '@google/genai';
+import OpenAI from 'openai';
 
 const N8N_RELAY_URL = 'https://n8n.dimension.expert/webhook/volkern-diagnostico-relay-v1';
 
-// Initialize Gemini Client
-// Using an empty string fallback during build time to prevent static generation crash
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || 'dummy-key-for-build' });
+// Initialize OpenRouter Client (using OpenAI SDK compatibility)
+const openai = new OpenAI({
+    baseURL: "https://openrouter.ai/api/v1",
+    apiKey: process.env.OPENROUTER_API_KEY || 'dummy-key-for-build',
+});
 
 export async function POST(req: NextRequest) {
     try {
@@ -50,19 +52,20 @@ export async function POST(req: NextRequest) {
         let finalAIExecutiveDiagnosis = "No se pudo generar el diagnóstico con IA en este momento.";
 
         try {
-            console.log('[Gemini] Requesting Executive Diagnosis generation...');
+            console.log('[OpenRouter] Requesting Executive Diagnosis generation...');
 
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: [
-                    { role: 'user', parts: [{ text: executiveDiagnosisPrompt }] }
+            const completion = await openai.chat.completions.create({
+                model: 'nvidia/nemotron-3-nano-30b-a3b:free',
+                messages: [
+                    { role: 'system', content: 'Eres un Consultor Estratégico Senior con 20+ años de experiencia en diseño de modelos de negocio, automatización de procesos y transformación digital para pymes y empresas de servicios.\nTu función NO es transcribir respuestas del usuario.\nTu función es interpretar, sintetizar y convertir respuestas en un diagnóstico claro de negocio que un CEO pueda entender y tomar decisiones.\nEstás entrenado en venta consultiva, neuroventas y diseño de roadmaps de crecimiento.\nEscribes para decisores, no para perfiles técnicos.' },
+                    { role: 'user', content: executiveDiagnosisPrompt }
                 ]
             });
 
-            finalAIExecutiveDiagnosis = response.text || finalAIExecutiveDiagnosis;
-            console.log('[Gemini] Executive Diagnosis generated successfully.');
+            finalAIExecutiveDiagnosis = completion.choices[0]?.message?.content || finalAIExecutiveDiagnosis;
+            console.log('[OpenRouter] Executive Diagnosis generated successfully.');
         } catch (aiError) {
-            console.error('[Gemini] Error generating diagnosis:', aiError);
+            console.error('[OpenRouter] Error generating diagnosis:', aiError);
         }
 
         const formalProposal = generateCommercialProposal(state, { mode: 'aggressive' });
