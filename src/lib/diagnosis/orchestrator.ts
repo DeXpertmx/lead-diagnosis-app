@@ -167,23 +167,24 @@ FASE C – Ventaja Competitiva (IA)
 ✅ Enfocar en negocio, no en sistemas
 
 6️⃣ PRÓXIMAS 3 DECISIONES ESTRATÉGICAS (14 DÍAS)
-Instrucción para la IA (prompt interno):
-Después de generar el diagnóstico, la hoja de ruta A/B/C y la propuesta preliminar, genera un bloque final titulado:
-“PRÓXIMAS 3 DECISIONES ESTRATÉGICAS (14 DÍAS)”
+Instrucción para la IA:
+Genera un bloque final titulado "PRÓXIMAS 3 DECISIONES ESTRATÉGICAS (14 DÍAS)".
 Este bloque debe:
-- Traducir el diagnóstico a decisiones de negocio concretas (no acciones técnicas).
-- Estar escrito para un CEO / fundador, no para un perfil técnico.
-- Evitar lenguaje de herramientas (n8n, CRM, IA, etc.) salvo que sea imprescindible.
-- Enfocarse en impacto de negocio, velocidad, ventaja competitiva y riesgo.
-- Cada decisión debe incluir (1. La decisión que debe tomar, 2. Por qué es crítica ahora (riesgo de no hacerlo), 3. Qué desbloquea en el crecimiento del negocio)
-- No más de 3 decisiones. No usar lenguaje genérico.
+- Traducir el diagnóstico a decisiones de negocio concretas, crudas y urgentes (cero acciones técnicas).
+- Estar escrito para un CEO dictaminando el rumbo de su empresa.
+- Cada decisión debe incluir:
+   1. La decisión literal que debe tomar (Ej. "Nuestra ventaja competitiva será velocidad + orden + seguimiento automático.")
+   2. Por qué es crítica AHORA (qué pasa si nace operando como la competencia y por qué es un riesgo).
+   3. Qué desbloquea.
+- MÁXIMO 3 decisiones.
 
-🧠 REGLAS DE ORO PARA EL TEXTO
-- Nunca copies frases literales del cliente
-- Resume, interpreta y traduce a lenguaje ejecutivo
-- Si detectas incoherencias en las respuestas del cliente, señálalas suavemente
-- Habla en términos de negocio: crecimiento, control, rentabilidad, ventaja competitiva
-- El texto debe sonar a consultor senior, no a IA
+🧠 REGLAS DE ORO Y EJEMPLO DE TONO
+- Nunca copies frases literales del cliente.
+- El problema real NUNCA es "falta de automatización". El problema real es (ejemplo): "Si naces operando como tus competidores, vas a crecer lento, caro y sin control".
+- La oportunidad real NUNCA es "usar un CRM". La oportunidad es: "Tienes una ventana estratégica para nacer mejor diseñado que el mercado."
+- En la Fase A, la solución NUNCA es "Conectar WhatsApp a n8n". La solución es: "Definir tu sistema de ventas digital base (cómo entra un lead, cómo se atiende, cómo se cierra) antes de salir a vender."
+- Habla en términos de arquitectura operativa, ingresos recurrentes, escala pobre, costo de oportunidad y sistemas de ventas.
+- Tu tono debe ser firme, consultivo, de alguien que ya ha visto fracasar a otras empresas por no estructurarse bien desde el día uno.
 `.trim();
 }
 
