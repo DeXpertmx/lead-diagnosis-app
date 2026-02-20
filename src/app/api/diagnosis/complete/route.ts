@@ -117,7 +117,7 @@ export async function POST(req: NextRequest) {
                 procesoActual: state.procesoActual || 'No especificado',
                 objetivoNegocio: state.objetivoNegocio || 'No especificado',
                 planesIA: finalAIExecutiveDiagnosis,
-                linkAgenda: process.env.LINK_AGENDA || 'https://calendly.com/dimensionexpert/sesion-estrategica'
+                linkAgenda: process.env.LINK_AGENDA || 'https://booking.dimension.expert/'
             });
 
             // Send internal notification alert
