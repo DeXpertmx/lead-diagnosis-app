@@ -11,7 +11,12 @@ import {
 import { registerLead, registerLeadInteraction, createTask } from '@/lib/volkern/leads';
 import { sendPostDiagnosisEmail, sendInternalNotificationEmail } from '@/lib/email/resend';
 
+import { GoogleGenAI } from '@google/genai';
+
 const N8N_RELAY_URL = 'https://n8n.dimension.expert/webhook/volkern-diagnostico-relay-v1';
+
+// Initialize Gemini Client
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 export async function POST(req: NextRequest) {
     try {
@@ -38,7 +43,27 @@ export async function POST(req: NextRequest) {
         console.log(`[Volkern] Lead registered/updated: ${leadId}`);
 
         // 2. Generate Senior Narrative Assets
-        const executiveDiagnosis = generateExecutiveDiagnosis(state);
+        // The executiveDiagnosis is now strictly the System + User instructions mapping the form variables
+        const executiveDiagnosisPrompt = generateExecutiveDiagnosis(state);
+
+        let finalAIExecutiveDiagnosis = "No se pudo generar el diagnóstico con IA en este momento.";
+
+        try {
+            console.log('[Gemini] Requesting Executive Diagnosis generation...');
+
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: [
+                    { role: 'user', parts: [{ text: executiveDiagnosisPrompt }] }
+                ]
+            });
+
+            finalAIExecutiveDiagnosis = response.text || finalAIExecutiveDiagnosis;
+            console.log('[Gemini] Executive Diagnosis generated successfully.');
+        } catch (aiError) {
+            console.error('[Gemini] Error generating diagnosis:', aiError);
+        }
+
         const formalProposal = generateCommercialProposal(state, { mode: 'aggressive' });
         const script = generateStrategicSessionScript(state);
         const briefing = generateConsultantExecutiveSummary(state);
@@ -47,7 +72,7 @@ export async function POST(req: NextRequest) {
         // 3. Register Assets as CRM Internal Notes (Sequential)
         console.log('[Volkern] Registering analytical assets...');
         const assets = [
-            { tipo: 'Plan de Automatización ABC', contenido: executiveDiagnosis },
+            { tipo: 'Plan de Automatización ABC (Generado por IA)', contenido: finalAIExecutiveDiagnosis },
             { tipo: 'Propuesta Técnica Senior', contenido: formalProposal },
             { tipo: 'Guion de Sesión Estratégica', contenido: script },
             { tipo: 'Briefing para Consultor', contenido: briefing },
@@ -89,7 +114,7 @@ export async function POST(req: NextRequest) {
                 dolorPrincipal: state.dolorPrincipal || 'No especificado',
                 procesoActual: state.procesoActual || 'No especificado',
                 objetivoNegocio: state.objetivoNegocio || 'No especificado',
-                planesIA: executiveDiagnosis,
+                planesIA: finalAIExecutiveDiagnosis,
                 linkAgenda: process.env.LINK_AGENDA || 'https://calendly.com/dimensionexpert/sesion-estrategica'
             });
 
