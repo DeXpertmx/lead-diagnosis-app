@@ -38,7 +38,7 @@ export async function sendPostDiagnosisEmail(to: string, data: EmailTemplateData
         .replace(/\*\*(.*)\*\*/g, '<strong>$1</strong>');
 
     return client.emails.send({
-        from: 'Volkern AI <diagnostico@dimensionexpert.com>',
+        from: 'Volkern AI <noreply@volkern.app>',
         to: [to],
         subject: `Hoja de Ruta Estratégica: Transformación para ${data.nombre}`,
         html: `
@@ -102,7 +102,7 @@ export async function sendInternalNotificationEmail(data: InternalNotificationDa
     const volkernLeadUrl = `https://volkern.app/leads/${data.leadId}`;
 
     return client.emails.send({
-        from: 'Volkern Alerts <alertas@dimensionexpert.com>',
+        from: 'Volkern Alerts <noreply@volkern.app>',
         to: [process.env.CONSULTANT_EMAIL || 'hvcab@hotmail.com'],
         subject: `🚀 NUEVO LEAD CALIFICADO: ${data.empresa} (${data.prioridad}/10)`,
         html: `
@@ -154,7 +154,7 @@ export async function sendProposalEmail(to: string, data: ProposalEmailData) {
         : `Propuesta de Eficiencia: Optimización para ${data.empresa}`;
 
     return client.emails.send({
-        from: 'Volkern AI <diagnostico@dimensionexpert.com>',
+        from: 'Volkern AI <noreply@volkern.app>',
         to: [to],
         subject: subject,
         html: `
@@ -199,7 +199,7 @@ export async function sendEmail({ to, subject, html, from }: { to: string | stri
     if (!client) throw new Error('Resend client not initialized');
 
     return client.emails.send({
-        from: from || 'Volkern AI <diagnostico@dimensionexpert.com>',
+        from: from || 'Volkern AI <noreply@volkern.app>',
         to: Array.isArray(to) ? to : [to],
         subject: subject,
         html: html
