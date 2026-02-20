@@ -16,7 +16,8 @@ import { GoogleGenAI } from '@google/genai';
 const N8N_RELAY_URL = 'https://n8n.dimension.expert/webhook/volkern-diagnostico-relay-v1';
 
 // Initialize Gemini Client
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+// Using an empty string fallback during build time to prevent static generation crash
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || 'dummy-key-for-build' });
 
 export async function POST(req: NextRequest) {
     try {
