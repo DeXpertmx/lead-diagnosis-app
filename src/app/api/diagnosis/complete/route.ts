@@ -68,27 +68,12 @@ export async function POST(req: NextRequest) {
             console.error('[OpenRouter] Error generating diagnosis:', aiError);
         }
 
-        const formalProposal = generateCommercialProposal(state, { mode: 'aggressive' });
-        const script = generateStrategicSessionScript(state);
-        const briefing = generateConsultantExecutiveSummary(state);
-        const checklist = generateClosingChecklist(state);
-
-        // 3. Register Assets as CRM Internal Notes (Sequential)
-        console.log('[Volkern] Registering analytical assets...');
-        const assets = [
-            { tipo: 'Plan de Automatización ABC (Generado por IA)', contenido: finalAIExecutiveDiagnosis },
-            { tipo: 'Propuesta Técnica Senior', contenido: formalProposal },
-            { tipo: 'Guion de Sesión Estratégica', contenido: script },
-            { tipo: 'Briefing para Consultor', contenido: briefing },
-            { tipo: 'Checklist de Cierre', contenido: checklist }
-        ];
-
-        for (const asset of assets) {
-            await registerLeadInteraction(leadId, {
-                tipo: 'nota',
-                contenido: `[${asset.tipo}]\n\n${asset.contenido}`
-            });
-        }
+        // 3. Register Asset as CRM Internal Note
+        console.log('[Volkern] Registering analytical asset...');
+        await registerLeadInteraction(leadId, {
+            tipo: 'nota',
+            contenido: `[Plan de Automatización ABC (Generado por IA)]\n\n${finalAIExecutiveDiagnosis}`
+        });
 
         // 4. Create Follow-up Task (24 hours)
         try {
